@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CCTV Monitoring & Video Analytics Platform</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <!-- Navigation -->
+  <header class="navbar">
+    <div class="nav-brand">
+      <h1>okDriver CCTV Monitoring & Video Analytics</h1>
+      <p>Gujarat Police Hackathon 2026 - Centralized Surveillance Prototype</p>
+    </div>
+    <div class="nav-actions">
+      <div id="systemWsStatus" class="status-badge">
+        <span class="status-dot"></span>
+        <span id="systemWsText">Live Connected</span>
+      </div>
+      <button id="btnToggleAudio" class="btn">Sound: On</button>
+      <button id="btnOpenCameras" class="btn">Cameras</button>
+      <button id="btnOpenWatchlist" class="btn">Watchlist</button>
+      <a href="/docs" target="_blank" class="btn">Swagger Docs</a>
+    </div>
+  </header>
+
+  <div class="container">
+    
+    <!-- Stats Row -->
+    <section class="stats-grid">
+      <div class="stat-card">
+        <div class="label">Total Cameras</div>
+        <div class="value" id="statTotalCameras">--</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Camera Health</div>
+        <div class="value">
+          <span style="color: #16a34a;" id="statOnlineCameras">0</span>
+          <span style="font-size: 14px; color: #94a3b8;">/</span>
+          <span style="color: #d97706;" id="statDegradedCameras">0</span>
+          <span style="font-size: 14px; color: #94a3b8;">/</span>
+          <span style="color: #dc2626;" id="statOfflineCameras">0</span>
+        </div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Active Alerts</div>
+        <div class="value" id="statActiveAlerts" style="color: #dc2626;">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="label">Detections Today</div>
+        <div class="value" id="statDetectionsToday" style="color: #2563eb;">--</div>
+      </div>
+    </section>
+
+    <!-- Main Workspace -->
+    <main class="main-grid">
+
+      <!-- Left Column: Video Feeds & Map -->
+      <div>
+        
+        <!-- Live Video Feeds -->
+        <section class="card">
+          <div class="card-header">
+            <h2>Live CCTV Feeds</h2>
+            <div style="font-size: 12px; color: #64748b;">4 Active Channels</div>
+          </div>
+          <div class="card-body">
+            <div id="videoTilesContainer" class="video-grid"></div>
+          </div>
+        </section>
+
+        <!-- GIS Surveillance & Route Tracing -->
+        <section class="card">
+          <div class="card-header">
+            <h2>Map & Vehicle Route Tracing</h2>
+            <div style="font-size: 12px; color: #64748b;">GIS Surveillance</div>
+          </div>
+          <div class="card-body">
+            <div class="search-bar">
+              <input type="text" id="traceSearchInput" class="search-input" placeholder="Enter Vehicle Number (e.g. GJ01XX0001)" />
+              <button id="btnSearchTrace" class="btn btn-primary">Trace Vehicle</button>
+              <button id="btnClearTrace" class="btn">Clear</button>
+            </div>
+
+            <div id="leafletMap"></div>
+
+            <div id="traceActiveBanner" class="trace-summary" style="display: none;">
+              <div>
+                <strong>Tracking: </strong><span id="tracePlateDisplay"></span>
+                <span id="traceWatchlistBadge" style="margin-left: 8px; color: #dc2626; font-weight: 600;">[WATCHLIST TARGET]</span>
+                <span id="traceCountDisplay" style="margin-left: 12px; color: #475569;"></span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <!-- Right Column: Alerts & Realtime Stream -->
+      <div>
+
+        <!-- Watchlist Alerts -->
+        <section class="card">
+          <div class="card-header">
+            <h2>Real-Time Alerts</h2>
+            <span id="alertCountBadge" style="font-size: 12px; color: #dc2626; font-weight: 600;"></span>
+          </div>
+          <div class="card-body">
+            <div id="alertsList" class="alerts-list"></div>
+          </div>
+        </section>
+
+        <!-- Recent Vehicle Detections -->
+        <section class="card">
+          <div class="card-header">
+            <h2>Recent Detections</h2>
+            <div style="font-size: 12px; color: #64748b;">ANPR Ingestion Feed</div>
+          </div>
+          <div class="card-body">
+            <div id="detectionsStream" class="detections-list"></div>
+          </div>
+        </section>
+
+      </div>
+
+    </main>
+
+  </div>
+
+  <!-- Cameras Modal -->
+  <div id="cameraModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-size: 15px; font-weight: 600;">Camera Registry</h3>
+        <button id="btnCloseCameras" class="btn btn-sm">Close</button>
+      </div>
+      <div class="modal-body">
+        <h4 style="font-size: 13px; margin-bottom: 8px; color: #475569;">Registered Cameras</h4>
+        <div style="max-height: 200px; overflow-y: auto; margin-bottom: 16px; border: 1px solid #e2e8f0;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Name</th>
+                <th>Zone</th>
+                <th>Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="camerasTableBody"></tbody>
+          </table>
+        </div>
+
+        <h4 style="font-size: 13px; margin-bottom: 8px; color: #475569;">Onboard New Camera</h4>
+        <form id="cameraForm" class="form-grid">
+          <div class="form-group">
+            <label>Camera ID</label>
+            <input id="camId" placeholder="CAM-007" required />
+          </div>
+          <div class="form-group">
+            <label>Camera Name</label>
+            <input id="camName" placeholder="Prahladnagar Cross Road" required />
+          </div>
+          <div class="form-group">
+            <label>Department</label>
+            <input id="camDept" value="Traffic Police - Ahmedabad West" required />
+          </div>
+          <div class="form-group">
+            <label>Zone</label>
+            <input id="camZone" value="Ahmedabad West" required />
+          </div>
+          <div class="form-group">
+            <label>Latitude</label>
+            <input type="number" step="0.0001" id="camLat" value="23.0125" required />
+          </div>
+          <div class="form-group">
+            <label>Longitude</label>
+            <input type="number" step="0.0001" id="camLon" value="72.5122" required />
+          </div>
+          <div class="form-group">
+            <label>Camera Type</label>
+            <select id="camType">
+              <option value="ANPR">ANPR</option>
+              <option value="PTZ">PTZ</option>
+              <option value="FIXED">FIXED</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Protocol</label>
+            <select id="camProtocol">
+              <option value="SIMULATED">SIMULATED</option>
+              <option value="WEBCAM">WEBCAM (Live Laptop / USB)</option>
+              <option value="HLS">HLS (Live M3U8 Stream)</option>
+              <option value="RTSP">RTSP</option>
+            </select>
+          </div>
+          <div class="form-group full">
+            <label>Stream URL</label>
+            <input id="camStreamUrl" value="/assets/videos/feed1_junction.mp4" required />
+          </div>
+          <div class="form-group full">
+            <button type="submit" class="btn btn-primary" style="width: 100%;">Add Camera</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Watchlist Modal -->
+  <div id="watchlistModal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 style="font-size: 15px; font-weight: 600;">Watchlist Registry</h3>
+        <button id="btnCloseWatchlist" class="btn btn-sm">Close</button>
+      </div>
+      <div class="modal-body">
+        <h4 style="font-size: 13px; margin-bottom: 8px; color: #475569;">Active Targets</h4>
+        <div style="max-height: 200px; overflow-y: auto; margin-bottom: 16px; border: 1px solid #e2e8f0;">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>Identifier</th>
+                <th>Category</th>
+                <th>Severity</th>
+                <th>Description</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="watchlistTableBody"></tbody>
+          </table>
+        </div>
+
+        <h4 style="font-size: 13px; margin-bottom: 8px; color: #475569;">Add New Target</h4>
+        <form id="watchlistForm" class="form-grid">
+          <div class="form-group">
+            <label>Vehicle Plate / ID</label>
+            <input id="wlIdentifier" placeholder="GJ01ZZ9999" required />
+          </div>
+          <div class="form-group">
+            <label>Category</label>
+            <select id="wlCategory">
+              <option value="STOLEN_VEHICLE">STOLEN_VEHICLE</option>
+              <option value="WANTED_PERSON">WANTED_PERSON</option>
+              <option value="SUSPICIOUS_VEHICLE">SUSPICIOUS_VEHICLE</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Severity</label>
+            <select id="wlSeverity">
+              <option value="CRITICAL">CRITICAL</option>
+              <option value="HIGH">HIGH</option>
+              <option value="MEDIUM">MEDIUM</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Owner / Suspect</label>
+            <input id="wlOwner" placeholder="Rajesh Sharma" />
+          </div>
+          <div class="form-group full">
+            <label>Description / FIR Details</label>
+            <input id="wlDesc" placeholder="FIR #129/2026 - Stolen vehicle" required />
+          </div>
+          <div class="form-group full">
+            <button type="submit" class="btn btn-danger" style="width: 100%;">Add to Watchlist</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+  <script type="module" src="/static/js/app.js"></script>
+</body>
+</html>

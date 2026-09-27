@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  cctv-platform:
+    build: .
+    container_name: okdriver-cctv-platform
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./okdriver_cctv.db
+      - ANPR_DEDUP_WINDOW_SECONDS=15
+      - CAMERA_HEARTBEAT_TIMEOUT=45
+      - MIN_ALERT_CONFIDENCE=0.75
+    volumes:
+      - ./okdriver_cctv.db:/app/okdriver_cctv.db
+      - ./static/assets:/app/static/assets
+    restart: unless-stopped
